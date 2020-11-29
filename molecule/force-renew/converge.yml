@@ -1,0 +1,11 @@
+---
+- name: Converge
+  hosts: all
+  vars:
+    lc_force_challenge: yes
+  tasks:
+    - set_fact:
+        lc_common_name: "renew-test-{{ 1000 | random | hash('md5') }}"
+    - name: "Include letsencrypt-cloudflare"
+      include_role:
+        name: "letsencrypt-cloudflare"

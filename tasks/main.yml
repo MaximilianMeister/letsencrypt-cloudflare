@@ -1,0 +1,101 @@
+---
+- name: Set ACME server to staging endpoint
+  include_vars: staging.yml
+  when: not lc_production|bool
+
+- name: Set ACME server to production endpoint
+  include_vars: production.yml
+  when: lc_production|bool
+
+- name: Update apt-get repo and cache
+  become: yes
+  apt:
+    update_cache: yes
+  when: ansible_os_family == 'Debian'
+
+- name: Install python3-cryptography
+  package:
+    name: python3-cryptography
+
+- name: Install openssl
+  package:
+    name: openssl
+
+- name: Generate an OpenSSL private key for CSR with the default values (4096 bits, RSA)
+  openssl_privatekey:
+    path: "{{ lc_csr_private_key_path }}"
+    return_content: yes
+    select_crypto_backend: cryptography
+  no_log: True
+  register: lc_generated_privkey
+
+- name: Generate an OpenSSL Certificate Signing Request for "{{ lc_common_name + '.' + lc_domain }}" to "{{ lc_csr_destination_path }}"
+  openssl_csr:
+    path: "{{ lc_csr_destination_path }}"
+    privatekey_path: "{{ lc_csr_private_key_path }}"
+    common_name: "{{ lc_common_name + '.' + lc_domain }}"
+    select_crypto_backend: cryptography
+
+- name: Request certificate with CSR "{{ lc_csr_destination_path }}" via DNS-01 challenge
+  acme_certificate:
+    account_key_content: "{{ lc_account_private_key }}"
+    account_email: "{{ lc_cloudflare_email }}"
+    src: "{{ lc_csr_destination_path }}"
+    cert: "{{ lc_certificate_destination_path }}"
+    challenge: dns-01
+    acme_directory: "{{ lc_acme_directory }}"
+    remaining_days: 30
+    force: "{{ lc_force_challenge }}"
+    acme_version: 2
+    terms_agreed: yes
+  register: lc_challenge
+
+- name: Create the TXT record for "{{ lc_domain }}" on Cloudflare
+  cloudflare_dns:
+    domain: "{{ lc_domain }}"
+    record: "_acme-challenge.{{ lc_common_name }}"
+    type: TXT
+    value: "{{ lc_challenge.challenge_data[lc_common_name + '.' + lc_domain]['dns-01'].resource_value }}"
+    solo: true
+    account_email: "{{ lc_cloudflare_email }}"
+    account_api_token: "{{ lc_cloudflare_api_key }}"
+    state: present
+  when:
+    - lc_challenge.challenge_data is defined
+    - lc_challenge.challenge_data
+
+- name: Get the certificate and write it to "{{ lc_certificate_destination_path }}"
+  acme_certificate:
+    data: "{{ lc_challenge | to_json }}"
+    cert: "{{ lc_certificate_destination_path }}"
+    src: "{{ lc_csr_destination_path }}"
+    account_key_content: "{{ lc_account_private_key }}"
+    challenge: dns-01
+    acme_directory: "{{ lc_acme_directory }}"
+    remaining_days: 30
+    force: "{{ lc_force_challenge }}"
+    acme_version: 2
+    terms_agreed: yes
+  register: lc_cert_received
+  retries: 3
+  delay: 20
+  until: not lc_cert_received.failed
+  ignore_errors: true
+
+# Make sure to always clean up the challenge, even when challenge failed
+- name: Delete the TXT record from "{{ lc_domain }}"
+  cloudflare_dns:
+    zone: "{{ lc_domain }}"
+    type: TXT
+    record: "_acme-challenge.{{ lc_common_name }}"
+    account_email: "{{ lc_cloudflare_email }}"
+    account_api_token: "{{ lc_cloudflare_api_key }}"
+    state: absent
+  when:
+    - lc_challenge.challenge_data is defined
+    - lc_challenge.challenge_data
+
+- name: Fail if certificate could not be received
+  fail:
+    msg: "{{ lc_cert_received }}"
+  when: lc_cert_received.failed

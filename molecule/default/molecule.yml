@@ -1,0 +1,19 @@
+---
+dependency:
+  name: galaxy
+  options:
+    requirements-file: molecule/requirements.yml
+    force: False
+driver:
+  name: docker
+platforms:
+  - name: instance
+    image: ubuntu:20.04
+    privileged: true
+provisioner:
+  name: ansible
+verifier:
+  name: ansible
+lint: |
+  set -e
+  yamllint .

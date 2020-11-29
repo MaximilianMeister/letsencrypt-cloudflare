@@ -1,0 +1,9 @@
+---
+- name: Converge
+  hosts: all
+  tasks:
+    - set_fact:
+        lc_common_name: "{{ 1000 | random | hash('md5') | truncate(8, True, '') }}"
+    - name: "Include letsencrypt-cloudflare"
+      include_role:
+        name: "letsencrypt-cloudflare"
