@@ -14,14 +14,17 @@
   when: ansible_os_family == 'Debian'
 
 - name: Install python3-cryptography
+  become: yes
   package:
     name: python3-cryptography
 
 - name: Install openssl
+  become: yes
   package:
     name: openssl
 
 - name: Generate an OpenSSL private key for CSR with the default values (4096 bits, RSA)
+  become: yes
   openssl_privatekey:
     path: "{{ lc_csr_private_key_path }}"
     return_content: yes
@@ -30,6 +33,7 @@
   register: lc_generated_privkey
 
 - name: Generate an OpenSSL Certificate Signing Request for "{{ lc_common_name + '.' + lc_domain }}" to "{{ lc_csr_destination_path }}"
+  become: yes
   openssl_csr:
     path: "{{ lc_csr_destination_path }}"
     privatekey_path: "{{ lc_csr_private_key_path }}"
@@ -65,6 +69,7 @@
     - lc_challenge.challenge_data
 
 - name: Get the certificate and write it to "{{ lc_certificate_destination_path }}"
+  become: yes
   acme_certificate:
     data: "{{ lc_challenge | to_json }}"
     cert: "{{ lc_certificate_destination_path }}"
