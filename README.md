@@ -38,6 +38,12 @@ lc_cloudflare_email: "my@e.mail"
 
 # Cloudflare ApiKey
 lc_cloudflare_api_key: "apikey"
+
+# User the certificate should belong to
+lc_user: ""
+
+# Group the certificate should belong to
+lc_group: ""
 ```
 
 Dependencies

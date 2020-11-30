@@ -104,3 +104,17 @@
   fail:
     msg: "{{ lc_cert_received }}"
   when: lc_cert_received.failed
+
+- name: Change permissions on certificate and key
+  become: yes
+  file:
+    path: "{{ item }}"
+    owner: "{{ lc_user }}"
+    group: "{{ lc_group }}"
+    mode: '0600'
+  with_items:
+    - "{{ lc_certificate_destination_path }}"
+    - "{{ lc_csr_private_key_path }}"
+  when:
+    - lc_user != ""
+    - lc_group != ""
